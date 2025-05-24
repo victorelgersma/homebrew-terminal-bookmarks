@@ -1,0 +1,41 @@
+name: Update Homebrew Formula
+
+on:
+  repository_dispatch:
+    types: [update_formula]
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+
+      - name: Download new release tarball
+        run: |
+          curl -L ${{ github.event.client_payload.tarball_url }} -o new_release.tar.gz
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          sha256=$(shasum -a 256 new_release.tar.gz | awk '{print $1}')
+          echo "sha256=$sha256" >> $GITHUB_OUTPUT
+
+      - name: Update bm.rb
+        run: |
+          sed -i.bak \
+            -e "s|url \".*\"|url \"${{ github.event.client_payload.tarball_url }}\"|" \
+            -e "s|sha256 \".*\"|sha256 \"${{ steps.sha.outputs.sha256 }}\"|" \
+            -e "s|version \".*\"|version \"${{ github.event.client_payload.version }}\"|" \
+            bm.rb
+
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update bm.rb for ${{ github.event.client_payload.version }}"
+          branch: ${{ github.ref }}
